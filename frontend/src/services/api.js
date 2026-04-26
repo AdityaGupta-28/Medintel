@@ -53,4 +53,8 @@ export const analyticsService = {
   getOverview: () => api.get('/analytics'),
 };
 
+export const appointmentService = {
+  getAll: () => api.get('/appointments'),
+};
+
 export default api;

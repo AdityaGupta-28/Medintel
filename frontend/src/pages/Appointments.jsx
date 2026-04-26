@@ -1,19 +1,19 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Search, Plus, Calendar as CalendarIcon, Clock,
-  CheckCircle2, XCircle, Clock3, Filter, ChevronRight,
-  User2, Stethoscope,
+  CheckCircle2, XCircle, Clock3, ChevronRight, Loader2, Stethoscope,
 } from 'lucide-react';
+import { appointmentService } from '../services/api';
 
 const DEMO_APPOINTMENTS = [
-  { id: 1, patient: 'John Doe',       doctor: 'Dr. Smith',  date: '2026-04-26', time: '09:00 AM', status: 'Scheduled',  type: 'Checkup',      avatar: 'J' },
-  { id: 2, patient: 'Jane Smith',     doctor: 'Dr. Adams',  date: '2026-04-26', time: '10:30 AM', status: 'Completed',  type: 'Consultation', avatar: 'J' },
-  { id: 3, patient: 'Robert Johnson', doctor: 'Dr. Smith',  date: '2026-04-26', time: '11:15 AM', status: 'Cancelled',  type: 'Follow-up',    avatar: 'R' },
-  { id: 4, patient: 'Emily Davis',    doctor: 'Dr. Wilson', date: '2026-04-27', time: '02:00 PM', status: 'Scheduled',  type: 'Therapy',      avatar: 'E' },
-  { id: 5, patient: 'Michael Brown',  doctor: 'Dr. Smith',  date: '2026-04-27', time: '03:30 PM', status: 'Scheduled',  type: 'Checkup',      avatar: 'M' },
-  { id: 6, patient: 'Sarah Connor',   doctor: 'Dr. Patel',  date: '2026-04-28', time: '09:45 AM', status: 'Scheduled',  type: 'Consultation', avatar: 'S' },
-  { id: 7, patient: 'David Martinez', doctor: 'Dr. Adams',  date: '2026-04-28', time: '11:00 AM', status: 'Completed',  type: 'Checkup',      avatar: 'D' },
+  { id: 1, patient: 'Rohan Verma',      doctor: 'Dr. Ananya Sharma', date: '2026-04-26', time: '09:00', status: 'Scheduled', type: 'Follow-up',    avatar: 'R' },
+  { id: 2, patient: 'Neha Kulkarni',    doctor: 'Dr. Vikram Rao',    date: '2026-04-26', time: '10:30', status: 'Completed', type: 'Consultation', avatar: 'N' },
+  { id: 3, patient: 'Suresh Menon',     doctor: 'Dr. Meera Iyer',    date: '2026-04-26', time: '11:15', status: 'Cancelled', type: 'Review',       avatar: 'S' },
+  { id: 4, patient: 'Kavya Reddy',      doctor: 'Dr. Ananya Sharma', date: '2026-04-27', time: '14:00', status: 'Scheduled', type: 'Therapy',      avatar: 'K' },
+  { id: 5, patient: 'Harpreet Singh',   doctor: 'Dr. Vikram Rao',    date: '2026-04-27', time: '15:30', status: 'Scheduled', type: 'Checkup',      avatar: 'H' },
+  { id: 6, patient: 'Aditi Chatterjee', doctor: 'Dr. Meera Iyer',    date: '2026-04-28', time: '09:45', status: 'Scheduled', type: 'Consultation', avatar: 'A' },
+  { id: 7, patient: 'Ibrahim Khan',     doctor: 'Dr. Ananya Sharma', date: '2026-04-28', time: '11:00', status: 'Completed', type: 'Review',       avatar: 'I' },
 ];
 
 const STATUS_CONFIG = {
@@ -55,20 +55,59 @@ const QuickStat = ({ label, value, color }) => (
 const Appointments = () => {
   const [search, setSearch]   = useState('');
   const [filter, setFilter]   = useState('All');
+  const [appointments, setAppointments] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [usingDemo, setUsingDemo] = useState(false);
 
-  const filtered = DEMO_APPOINTMENTS.filter(a => {
+  useEffect(() => {
+    const fetchAppointments = async () => {
+      setLoading(true);
+      try {
+        const { data } = await appointmentService.getAll();
+        const mapped = (Array.isArray(data) ? data : []).map((a) => {
+          const patientName = a?.patientId?.name || 'Unknown Patient';
+          const doctorName = a?.doctorId?.name || 'Unknown Doctor';
+          const dateObj = a?.date ? new Date(a.date) : new Date();
+          const reason = a?.reason || 'Consultation';
+
+          return {
+            id: a._id,
+            patient: patientName,
+            doctor: doctorName,
+            date: dateObj.toISOString().slice(0, 10),
+            time: a.timeSlot || `${String(dateObj.getHours()).padStart(2, '0')}:${String(dateObj.getMinutes()).padStart(2, '0')}`,
+            status: a.status || 'Scheduled',
+            type: reason,
+            avatar: patientName.charAt(0).toUpperCase(),
+          };
+        });
+        setAppointments(mapped);
+        setUsingDemo(false);
+      } catch {
+        setAppointments(DEMO_APPOINTMENTS);
+        setUsingDemo(true);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchAppointments();
+  }, []);
+
+  const filtered = appointments.filter((a) => {
     const matchSearch = a.patient.toLowerCase().includes(search.toLowerCase()) ||
                         a.doctor.toLowerCase().includes(search.toLowerCase());
     const matchFilter = filter === 'All' || a.status === filter;
     return matchSearch && matchFilter;
   });
 
-  const counts = {
-    all:       DEMO_APPOINTMENTS.length,
-    scheduled: DEMO_APPOINTMENTS.filter(a => a.status === 'Scheduled').length,
-    completed: DEMO_APPOINTMENTS.filter(a => a.status === 'Completed').length,
-    cancelled: DEMO_APPOINTMENTS.filter(a => a.status === 'Cancelled').length,
-  };
+  const counts = useMemo(() => ({
+    all:       appointments.length,
+    scheduled: appointments.filter((a) => a.status === 'Scheduled').length,
+    completed: appointments.filter((a) => a.status === 'Completed').length,
+    cancelled: appointments.filter((a) => a.status === 'Cancelled').length,
+  }), [appointments]);
+
+  const todayKey = new Date().toISOString().slice(0, 10);
 
   return (
     <div className="flex-1 p-8 h-screen overflow-y-auto bg-slate-50">
@@ -76,7 +115,14 @@ const Appointments = () => {
       <div className="mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Appointments</h1>
-          <p className="text-slate-500 mt-0.5">Manage doctor schedules and patient bookings</p>
+          <p className="text-slate-500 mt-0.5">
+            Manage doctor schedules and patient bookings
+            {usingDemo && (
+              <span className="ml-2 text-xs font-medium bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">
+                Demo Mode
+              </span>
+            )}
+          </p>
         </div>
         <button className="flex items-center gap-2 rounded-xl bg-blue-600 px-5 py-2.5 text-white hover:bg-blue-700 active:scale-95 transition-all shadow-sm shadow-blue-200 font-medium text-sm">
           <Plus size={18} />
@@ -103,7 +149,7 @@ const Appointments = () => {
           <div className="bg-white rounded-2xl p-5 shadow-sm border border-slate-100">
             <h3 className="font-bold text-slate-800 text-sm mb-4">Upcoming Today</h3>
             <div className="space-y-3">
-              {DEMO_APPOINTMENTS.filter(a => a.status === 'Scheduled' && a.date === '2026-04-26').map(a => (
+              {(appointments.filter((a) => a.status === 'Scheduled' && a.date === todayKey)).map((a) => (
                 <div key={a.id} className="flex items-center gap-3 group cursor-pointer">
                   <div className="w-8 h-8 rounded-xl bg-blue-100 text-blue-700 flex items-center justify-center font-bold text-xs flex-shrink-0">
                     {a.avatar}
@@ -115,6 +161,9 @@ const Appointments = () => {
                   <ChevronRight size={14} className="text-slate-300 group-hover:text-slate-500 transition-colors flex-shrink-0" />
                 </div>
               ))}
+              {appointments.filter((a) => a.status === 'Scheduled' && a.date === todayKey).length === 0 && (
+                <p className="text-xs text-slate-400">No scheduled appointments for today.</p>
+              )}
             </div>
           </div>
         </div>
@@ -173,7 +222,14 @@ const Appointments = () => {
                 </thead>
                 <tbody className="divide-y divide-slate-50">
                   <AnimatePresence>
-                    {filtered.length === 0 ? (
+                    {loading ? (
+                      <tr>
+                        <td colSpan={5} className="py-16 text-center text-slate-400 text-sm">
+                          <Loader2 size={18} className="animate-spin mx-auto mb-2" />
+                          Loading appointments...
+                        </td>
+                      </tr>
+                    ) : filtered.length === 0 ? (
                       <tr>
                         <td colSpan={5} className="py-16 text-center text-slate-400 text-sm">
                           No appointments match your criteria.
@@ -233,7 +289,7 @@ const Appointments = () => {
             <div className="px-6 py-3 border-t border-slate-100 bg-slate-50/50">
               <p className="text-xs text-slate-400">
                 Showing <span className="font-medium text-slate-600">{filtered.length}</span> of{' '}
-                <span className="font-medium text-slate-600">{DEMO_APPOINTMENTS.length}</span> appointments
+                <span className="font-medium text-slate-600">{appointments.length}</span> appointments
               </p>
             </div>
           </div>
